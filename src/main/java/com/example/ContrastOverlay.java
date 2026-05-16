@@ -1,7 +1,5 @@
 package com.example;
 
-import java.awt.AlphaComposite;
-import java.awt.Composite;
 import java.awt.Dimension;
 import java.awt.Graphics2D;
 import java.awt.Image;
@@ -20,7 +18,6 @@ public class ContrastOverlay extends Overlay
 {
 	private final ContrastConfig config;
 
-	private volatile BufferedImage lastFrame;
 	private BufferedImage processedFrame;
 	private LookupOp cachedOp;
 	private int lastContrastValue = -1;
@@ -37,51 +34,23 @@ public class ContrastOverlay extends Overlay
 
 	void onNewFrame(Image image)
 	{
-		if (image == null)
+		if (image == null || !(image instanceof BufferedImage))
 		{
 			return;
-		}
-
-		int w = image.getWidth(null);
-		int h = image.getHeight(null);
-		if (w <= 0 || h <= 0)
-		{
-			return;
-		}
-
-		if (image instanceof BufferedImage && ((BufferedImage) image).getType() == BufferedImage.TYPE_INT_RGB)
-		{
-			lastFrame = (BufferedImage) image;
-		}
-		else
-		{
-			BufferedImage converted = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
-			Graphics2D g = converted.createGraphics();
-			g.drawImage(image, 0, 0, null);
-			g.dispose();
-			lastFrame = converted;
-		}
-	}
-
-	void clearFrame()
-	{
-		lastFrame = null;
-		processedFrame = null;
-	}
-
-	@Override
-	public Dimension render(Graphics2D graphics)
-	{
-		BufferedImage frame = lastFrame;
-		if (frame == null)
-		{
-			return null;
 		}
 
 		int contrastValue = config.contrast();
 		if (contrastValue == 100)
 		{
-			return null;
+			return;
+		}
+
+		BufferedImage source = (BufferedImage) image;
+		int w = source.getWidth();
+		int h = source.getHeight();
+		if (w <= 0 || h <= 0)
+		{
+			return;
 		}
 
 		if (contrastValue != lastContrastValue)
@@ -90,9 +59,6 @@ public class ContrastOverlay extends Overlay
 			lastContrastValue = contrastValue;
 		}
 
-		int w = frame.getWidth();
-		int h = frame.getHeight();
-
 		if (processedFrame == null || processedFrame.getWidth() != w || processedFrame.getHeight() != h)
 		{
 			processedFrame = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
@@ -100,19 +66,25 @@ public class ContrastOverlay extends Overlay
 
 		try
 		{
-			cachedOp.filter(frame, processedFrame);
+			cachedOp.filter(source, processedFrame);
+			Graphics2D g = source.createGraphics();
+			g.drawImage(processedFrame, 0, 0, null);
+			g.dispose();
 		}
 		catch (Exception e)
 		{
 			log.warn("contrast filter failed", e);
-			return null;
 		}
+	}
 
-		Composite original = graphics.getComposite();
-		graphics.setComposite(AlphaComposite.Src);
-		graphics.drawImage(processedFrame, 0, 0, null);
-		graphics.setComposite(original);
+	void clearFrame()
+	{
+		processedFrame = null;
+	}
 
+	@Override
+	public Dimension render(Graphics2D graphics)
+	{
 		return null;
 	}
 
